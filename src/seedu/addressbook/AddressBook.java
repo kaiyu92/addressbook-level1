@@ -60,6 +60,7 @@ public class AddressBook {
      */
     private static final String MESSAGE_ADDED = "New person added: %1$s, Phone: %2$s, Email: %3$s";
     private static final String MESSAGE_ADDRESSBOOK_CLEARED = "Address book has been cleared!";
+    private static final String MESSAGE_EDITED = "Edited %1$s's property entry";
     private static final String MESSAGE_COMMAND_HELP = "%1$s: %2$s";
     private static final String MESSAGE_COMMAND_HELP_PARAMETERS = "\tParameters: %1$s";
     private static final String MESSAGE_COMMAND_HELP_EXAMPLE = "\tExample: %1$s";
@@ -97,6 +98,10 @@ public class AddressBook {
             + PERSON_DATA_PREFIX_PHONE + "PHONE_NUMBER "
             + PERSON_DATA_PREFIX_EMAIL + "EMAIL";
     private static final String COMMAND_ADD_EXAMPLE = COMMAND_ADD_WORD + " John Doe p/98765432 e/johnd@gmail.com";
+
+    private static final String COMMAND_EDIT_WORD = "edit";
+    private static final String COMMAND_EDIT_DESC = "Edit properties of a specific person";
+
 
     private static final String COMMAND_FIND_WORD = "find";
     private static final String COMMAND_FIND_DESC = "Finds all persons whose names contain any of the specified "
@@ -373,6 +378,8 @@ public class AddressBook {
         switch (commandType) {
             case COMMAND_ADD_WORD:
                 return executeAddPerson(commandArgs);
+            case COMMAND_EDIT_WORD:
+                return executeEditPerson(commandArgs);
             case COMMAND_FIND_WORD:
                 return executeFindPersons(commandArgs);
             case COMMAND_LIST_WORD:
@@ -435,6 +442,7 @@ public class AddressBook {
         return getMessageForSuccessfulAddPerson(personToAdd);
     }
 
+
     /**
      * Constructs a feedback message for a successful add person command execution.
      *
@@ -449,6 +457,40 @@ public class AddressBook {
     private static String getMessageForSuccessfulAddPerson(HashMap<PersonProperty, String> addedPerson) {
         return String.format(MESSAGE_ADDED,
                 getNameFromPerson(addedPerson), getPhoneFromPerson(addedPerson), getEmailFromPerson(addedPerson));
+    }
+
+    /**
+     * Edit a specified person's properties (specified by the command args) to the address book.
+     * The entire command arguments string is treated as a string representation of the person to edit.
+     *
+     * @param commandArgs full command args string from the user
+     * @return feedback display message for the operation result
+     */
+    private static String executeEditPerson(String commandArgs) {
+
+        //extract name from the string
+        String prefix = getPrefixOfProperty(commandArgs);
+        final int indexOfPrefix = commandArgs.indexOf(prefix);
+        String name = commandArgs.substring(0, indexOfPrefix).trim();
+
+        editPersonFromAddressBook(name, commandArgs.substring(indexOfPrefix).trim(), prefix);
+        return getMessageForSuccessfulEditPerson(name);
+    }
+
+    /**
+     * Constructs a feedback message for a successful edited property command execution.
+     *
+     * @param name of the person who was successfully added
+     * @return successful edit person's property feedback message
+     * @see #executeAddPerson(String)
+     */
+//    private static String getMessageForSuccessfulAddPerson(String[] addedPerson) {
+//        return String.format(MESSAGE_ADDED,
+//                getNameFromPerson(addedPerson), getPhoneFromPerson(addedPerson), getEmailFromPerson(addedPerson));
+//    }
+    private static String getMessageForSuccessfulEditPerson(String name) {
+        return String.format(MESSAGE_EDITED,
+                name);
     }
 
     /**
@@ -775,6 +817,50 @@ public class AddressBook {
         return lines;
     }
 
+    private static void editPersonsToFile(String name, String newVal){
+        List<String> newLines = new ArrayList<String>();
+        List<String> lines = getLinesInFile(storageFilePath);
+
+        for(String line: lines){
+            if(line.contains(name)){
+                String prefix = getPrefixOfProperty(newVal);
+                String [] vals = line.split(prefix);
+                newLines.add(vals[0] + changePropertyValue(vals[1], newVal, prefix));
+            }else{
+                newLines.add(line);
+            }
+
+        }
+
+        try {
+            Files.write(Paths.get(storageFilePath), newLines);
+        } catch (IOException ioe) {
+            showToUser(String.format(MESSAGE_ERROR_WRITING_TO_FILE, storageFilePath));
+            exitProgram();
+        }
+    }
+
+    private static String changePropertyValue(String line, String newVal, String prefix) {
+
+        final int indexOfPhonePrefix = line.indexOf(PERSON_DATA_PREFIX_PHONE);
+        final int indexOfEmailPrefix = line.indexOf(PERSON_DATA_PREFIX_EMAIL);
+
+        if(prefix.equals(PERSON_DATA_PREFIX_PHONE))
+            return newVal + " " + line.substring(indexOfEmailPrefix);
+        else if(prefix.equals(PERSON_DATA_PREFIX_EMAIL))
+            return newVal;
+
+        return "";
+    }
+
+    private static String getPrefixOfProperty(String query) {
+        if(query.indexOf("p/") != -1)
+            return PERSON_DATA_PREFIX_PHONE;
+        else if(query.indexOf("e/") != -1)
+            return PERSON_DATA_PREFIX_EMAIL;
+        else
+            return "";
+    }
     /**
      * Saves all data to the file. Exits program if there is an error saving to file.
      *
@@ -805,6 +891,26 @@ public class AddressBook {
     private static void addPersonToAddressBook(HashMap<PersonProperty, String> person) {
         ALL_PERSONS.add(person);
         savePersonsToFile(getAllPersonsInAddressBook(), storageFilePath);
+    }
+
+    /**
+     * Edit a specified person from the address book. Saves changes to storage file.
+     *
+     * @param person to add
+     */
+    private static void editPersonFromAddressBook(String name, String newVal, String prefix) {
+        HashMap<PersonProperty, String> person = null;
+
+        for(HashMap<PersonProperty, String> p : ALL_PERSONS)
+            if(p.get(PersonProperty.NAME).equals(name))
+                person = p;
+
+        if(prefix.equals(PERSON_DATA_PREFIX_PHONE))
+            person.put(PersonProperty.PHONE, newVal.substring(2));
+        else if(prefix.equals(PERSON_DATA_PREFIX_EMAIL))
+            person.put(PersonProperty.EMAIL, newVal.substring(2));
+
+        editPersonsToFile(name, newVal);
     }
 
     /**
